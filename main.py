@@ -11,7 +11,7 @@ from config import DECK_ID, DECK_NAME
 DEBUG = False
 
 
-class AnkiNoteGuidOfIdAndKey(genanki.Note):
+class AnkiNoteGuidOfDeckIdAndCardId(genanki.Note):
     def __init__(self, *args, **kwargs):
         self.deck_id = kwargs.pop('deck_id')
         self.card_id = kwargs.pop('card_id')
@@ -24,7 +24,7 @@ class AnkiNoteGuidOfIdAndKey(genanki.Note):
 
 def nonblank_lines(file: TextIO):
     for line in file:
-        new_line = line.rstrip()
+        new_line = line.strip()
         if new_line:
             yield new_line
 
@@ -35,8 +35,8 @@ class NoteGenerator:
         self.model = model
         self.deck_id = deck_id
 
-    def make_note(self, item: dict) -> AnkiNoteGuidOfIdAndKey:
-        return AnkiNoteGuidOfIdAndKey(
+    def make_note(self, item: dict) -> AnkiNoteGuidOfDeckIdAndCardId:
+        return AnkiNoteGuidOfDeckIdAndCardId(
             model=self.model,
             card_id=item['id'],
             fields=list(map(lambda field: item[field['name']], self.model.fields)),
@@ -46,28 +46,27 @@ class NoteGenerator:
     # Create list of dicts, where each dict has all fields specified in self.model + id.
     def process_file(self, file_path: str) -> None:
         with open(file_path) as file:
-            lines = nonblank_lines(file)
-            lines = list(filter(None, lines))  # Filter empty lines.
+            lines = list(nonblank_lines(file))
 
-            fields_with_id = self.model.fields.copy()
-            fields_with_id.insert(0, {'name': 'id'})
+        fields_with_id = self.model.fields.copy()
+        fields_with_id.insert(0, {'name': 'id'})
 
-            num_vals = len(fields_with_id)
+        num_vals = len(fields_with_id)
 
-            if len(lines) % num_vals != 0:
-                raise ValueError("Wrong file format")
+        if len(lines) % num_vals != 0:
+            raise ValueError("Wrong file format")
 
-            for i in range(0, len(lines), num_vals):
-                card = {}
-                j = 0
-                for field in fields_with_id:
-                    if DEBUG:
-                        print(field)
-                    card[field['name']] = lines[i + j]
-                    j += 1
+        for i in range(0, len(lines), num_vals):
+            card = {}
+            j = 0
+            for field in fields_with_id:
                 if DEBUG:
-                    print(card)
-                self.cards.append(card)
+                    print(field)
+                card[field['name']] = lines[i + j]
+                j += 1
+            if DEBUG:
+                print(card)
+            self.cards.append(card)
 
     def export(self) -> None:
         my_deck = genanki.Deck(self.deck_id, DECK_NAME)
