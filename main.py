@@ -53,7 +53,8 @@ class NoteGenerator:
                 card = {}
                 j = 0
                 for field in self.model.fields:
-                    print(field)
+                    if DEBUG:
+                        print(field)
                     card[field['name']] = lines[i + j]
                     j += 1
                 if DEBUG:
@@ -61,8 +62,8 @@ class NoteGenerator:
                 self.cards.append(card)
 
     def export(self) -> None:
-        my_deck = genanki.Deck(DECK_ID, DECK_NAME)
-        my_deck.add_model(BASE_MODEL)
+        my_deck = genanki.Deck(self.deck_id, DECK_NAME)
+        my_deck.add_model(self.model)
 
         for item in self.cards:
             note = self.make_note(item)
@@ -93,6 +94,7 @@ if __name__ == '__main__':
         os.chdir(path)
         filenames = glob.glob('./*.txt')
         for f in filenames:
-            print(f)
+            if DEBUG:
+                print(f)
             gen.process_file(f)
         gen.export()
