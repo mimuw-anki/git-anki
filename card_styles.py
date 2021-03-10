@@ -13,7 +13,6 @@ BASE_MODEL = genanki.Model(
     MODEL_ID,
     "Base model for mimuw-anki",
     fields=[
-        {"name": "id"},
         {"name": "question"},
         {"name": "answer"},
     ],

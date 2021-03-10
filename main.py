@@ -14,11 +14,12 @@ DEBUG = False
 class AnkiNoteGuidOfIdAndKey(genanki.Note):
     def __init__(self, *args, **kwargs):
         self.deck_id = kwargs.pop('deck_id')
+        self.card_id = kwargs.pop('card_id')
         super().__init__(*args, **kwargs)
 
     @property
     def guid(self) -> int:
-        return genanki.guid_for(self.deck_id, self.fields[0])
+        return genanki.guid_for(self.deck_id, self.card_id)
 
 
 def nonblank_lines(file: TextIO):
@@ -37,22 +38,29 @@ class NoteGenerator:
     def make_note(self, item: dict) -> AnkiNoteGuidOfIdAndKey:
         return AnkiNoteGuidOfIdAndKey(
             model=self.model,
+            card_id=item['id'],
             fields=list(map(lambda field: item[field['name']], self.model.fields)),
             deck_id=self.deck_id
         )
 
+    # Create list of dicts, where each dict has all fields specified in self.model + id.
     def process_file(self, file_path: str) -> None:
         with open(file_path) as file:
             lines = nonblank_lines(file)
-            lines = list(filter(None, lines))  # filter empty lines
+            lines = list(filter(None, lines))  # Filter empty lines.
 
-            if len(lines) % len(self.model.fields) != 0:
+            fields_with_id = self.model.fields.copy()
+            fields_with_id.insert(0, {'name': 'id'})
+
+            num_vals = len(fields_with_id)
+
+            if len(lines) % num_vals != 0:
                 raise ValueError("Wrong file format")
 
-            for i in range(0, len(lines), len(self.model.fields)):
+            for i in range(0, len(lines), num_vals):
                 card = {}
                 j = 0
-                for field in self.model.fields:
+                for field in fields_with_id:
                     if DEBUG:
                         print(field)
                     card[field['name']] = lines[i + j]
