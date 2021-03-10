@@ -1,4 +1,5 @@
 import glob
+import html
 import os
 import sys
 from typing import List, TextIO
@@ -22,11 +23,11 @@ class AnkiNoteGuidOfDeckIdAndCardId(genanki.Note):
         return genanki.guid_for(self.deck_id, self.card_id)
 
 
-def nonblank_lines(file: TextIO):
+def preprocess_lines(file: TextIO):
     for line in file:
         new_line = line.strip()
         if new_line:
-            yield new_line
+            yield html.escape(new_line)
 
 
 class NoteGenerator:
@@ -46,7 +47,7 @@ class NoteGenerator:
     # Create list of dicts, where each dict has all fields specified in self.model + id.
     def process_file(self, file_path: str) -> None:
         with open(file_path) as file:
-            lines = list(nonblank_lines(file))
+            lines = list(preprocess_lines(file))
 
         fields_with_id = self.model.fields.copy()
         fields_with_id.insert(0, {'name': 'id'})
