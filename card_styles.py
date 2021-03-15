@@ -1,4 +1,5 @@
 import genanki
+
 MODEL_ID = 148814881488
 CSS = """.card {
  font-family: arial;
