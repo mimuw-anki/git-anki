@@ -1,8 +1,7 @@
 import glob
-import html
 import os
 import sys
-from typing import List, TextIO
+from typing import List, Set, Union
 
 import genanki
 
@@ -24,6 +23,48 @@ class AnkiNoteGuidOfDeckIdAndCardId(genanki.Note):
         return genanki.guid_for(self.deck_id, self.card_id)
 
 
+class InputFile:
+    def __init__(
+        self, file_path: str, file_ids_store: Set[str], model: genanki.Model
+    ) -> None:
+        with open(file_path) as f:
+            lines = [
+                stripped_line for l in f.readlines() if (stripped_line := l.strip())
+            ]
+
+        deck_id, deck_name, f_id, *fishcards_lines = lines
+
+        assert f_id.startswith("file_id:")
+        file_id = f_id.lower().strip()
+        if file_id in file_ids_store:
+            raise ValueError(f"Duplicate file_id: {file_id}")
+        file_ids_store.add(file_id)
+
+        field_names = [f["name"] for f in model.fields.copy()]
+        fields_per_fishcards = len(field_names) + 1  # + card_id
+
+        if len(fishcards_lines) % fields_per_fishcards != 0:
+            raise ValueError("Wrong file format")
+
+        cards, card_ids = [], set()
+        for i in range(0, len(fishcards_lines), fields_per_fishcards):
+            card: dict[str, Union[str, int]] = {
+                "card_id": hash((fishcards_lines[i], file_id))
+            }
+            if card["card_id"] in card_ids:
+                raise ValueError(
+                    f"Duplicate card id {card['card_id']} in file {file_id}"
+                )
+            card_ids.add(card["card_id"])
+
+            card.update(zip(field_names, fishcards_lines[i + 1 :]))
+            cards.append(card)
+
+        self.deck_id = deck_id
+        self.deck_name = deck_name
+        self.cards = cards
+
+
 class NoteGenerator:
     def __init__(self, model: genanki.Model, use_dummy_id: bool = False) -> None:
         self.cards: List[dict] = []
@@ -31,6 +72,7 @@ class NoteGenerator:
         self.use_dummy_id = use_dummy_id
         self.deck_id = DUMMY_DECK_ID
         self.deck_name = PLACEHOLDER_DECK_NAME
+        self._processed_file_ids: Set[str] = set()
 
     def make_note(self, item: dict) -> AnkiNoteGuidOfDeckIdAndCardId:
         assert self.use_dummy_id or self.deck_id != DUMMY_DECK_ID
@@ -45,39 +87,29 @@ class NoteGenerator:
         assert deck_id_raw.lower().startswith("deck_id:")
         assert deck_name_raw.lower().startswith("deck_name:")
 
-        self.deck_id = int(deck_id_raw.split("deck_id:", 1)[1].strip())
-        self.deck_name = deck_name_raw.split("deck_name:", 1)[1].strip()
+        deck_id = int(deck_id_raw.split("deck_id:", 1)[1].strip())
+        deck_name = deck_name_raw.split("deck_name:", 1)[1].strip()
+
+        if self.use_dummy_id:
+            # The lines above are executed unconditionally so that they verify
+            # the validity of data & format.
+            return
+
+        if self.deck_id != DUMMY_DECK_ID:
+            # It's not the first file.
+            if self.deck_id != deck_id or self.deck_name != deck_name:
+                raise ValueError("Ambiguous deck_id or deck_name")
+
+        self.deck_id = deck_id
+        self.deck_name = deck_name
 
     def process_file(self, file_path: str) -> None:
         # Create list of dicts, where each dict has all fields specified in self.model + id.
-
-        with open(file_path) as f:
-            lines = [
-                stripped_line for l in f.readlines() if (stripped_line := l.strip())
-            ]
-
-        deck_id, deck_name, f_id, *fishcards_lines = lines
-        self.update_deck_data(deck_id, deck_name)
-
-        assert f_id.startswith("file_id:")
-        file_id = f_id.lower().strip()
-
-        field_names = [f["name"] for f in self.model.fields.copy()]
-        fields_per_fishcards = len(field_names) + 1  # + card_id
-
-        if len(fishcards_lines) % fields_per_fishcards != 0:
-            raise ValueError("Wrong file format")
-
-        file_cards = []
-        for i in range(0, len(fishcards_lines), fields_per_fishcards):
-            card = {"card_id": hash((fishcards_lines[i], file_id))}
-            card.update(zip(field_names, fishcards_lines[i + 1 :]))
-
-            if DEBUG:
-                print(card)
-            file_cards.append(card)
-
-        self.cards.extend(file_cards[::-1])  # needed to preserve the original order
+        file = InputFile(
+            file_path, file_ids_store=self._processed_file_ids, model=self.model
+        )
+        self.update_deck_data(file.deck_id, file.deck_name)
+        self.cards.extend(file.cards[::-1])  # needed to preserve the original order
 
     def export(self) -> None:
         deck = genanki.Deck(self.deck_id, self.deck_name)
