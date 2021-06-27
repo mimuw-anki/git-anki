@@ -1,7 +1,8 @@
 import glob
+import hashlib
 import os
 import sys
-from typing import List, Set, Union
+from typing import List, Set, Union, Sequence
 
 import genanki
 
@@ -49,7 +50,7 @@ class InputFile:
         cards, card_ids = [], set()
         for i in range(0, len(fishcards_lines), fields_per_fishcards):
             card: dict[str, Union[str, int]] = {
-                "card_id": hash((fishcards_lines[i], file_id))
+                "card_id": self._hash((fishcards_lines[i], file_id))
             }
             if card["card_id"] in card_ids:
                 raise ValueError(
@@ -63,6 +64,13 @@ class InputFile:
         self.deck_id = deck_id
         self.deck_name = deck_name
         self.cards = cards
+
+    @staticmethod
+    def _hash(string_sequence: Sequence[str]) -> str:
+        sha256 = hashlib.sha256()
+        for string in string_sequence:
+            sha256.update(string.encode("utf-8"))
+        return sha256.hexdigest()
 
 
 class NoteGenerator:
